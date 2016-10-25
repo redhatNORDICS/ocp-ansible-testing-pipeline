@@ -1,0 +1,11 @@
+---
+- hosts: localhost
+
+  tasks:
+    - name: Create files in /tmp
+      file:
+        dest: "{{ item }}"
+        state: touch
+      with_items:
+        - /tmp/my_file1
+        - /tmp/my_file2
