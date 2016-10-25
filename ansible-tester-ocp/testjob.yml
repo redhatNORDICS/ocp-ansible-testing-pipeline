@@ -1,0 +1,29 @@
+apiVersion: extensions/v1beta1
+kind: Job
+metadata:
+  name: testjob
+spec:
+  selector:         
+    matchLabels:
+      app: testjob
+  parallelism: 1    
+  completions: 1
+  template:         
+    metadata:
+      name: testjob
+      labels:
+        app: testjob
+    spec:
+      containers:
+      - name: testjob
+        image: 172.30.192.160:5000/jswensso-slask/docker-images
+        env:
+        - name: GIT_URL
+          value: "https://github.com/propyless/ansible-canary.git"
+        - name: PLAYBOOK
+          value: "init.yml"
+        command: ["/opt/app-root/runme.sh"]
+      restartPolicy: Never
+      activeDeadlineSeconds: 120
+
+

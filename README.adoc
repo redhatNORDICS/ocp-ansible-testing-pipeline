@@ -1,0 +1,6 @@
+= README
+
+.Creating the image in OpenShift
+----
+oc new-app https://github.com/redhatNORDICS/ocp-ansible-testing-pipeline --context-dir=ansible-tester-ocp
+----
