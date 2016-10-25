@@ -1,0 +1,92 @@
+node {
+   // Mark the code checkout 'stage'....
+   stage 'Checkout'
+
+   // Get some code from a GitHub repository
+   git url: 'https://github.com/propyless/ansible-canary.git'
+
+   // Mark the code syntax check stage
+   stage 'Unit Tests'
+   sh 'ls'
+   sh '''
+   if [[ "$(( ( RANDOM % 10 )  + 1 ))" -gt 11  ]];
+   then
+    /bin/false;
+   else
+    echo "Passed YAML Syntax Check"
+   fi
+'''
+   
+
+   // Mark the code build 'stage'....
+   stage 'Function Tests'
+   // Run the maven build
+   sh '''
+oc --insecure-skip-tls-verify login https://OCP-FQDN --token=thetoken123
+
+JOB_SHA=$(cat /dev/urandom | tr -dc 'a-z0-9' | fold -w 6 | head -n 1)
+
+echo "JOB SHA: ${JOB_SHA}"
+
+cat << EOF >testjob.yaml
+apiVersion: extensions/v1beta1
+kind: Job
+metadata:
+  name: testjob-${JOB_SHA}
+spec:
+  selector:         
+    matchLabels:
+      app: testjob
+  parallelism: 1    
+  completions: 1    
+  template:         
+    metadata:
+      name: testjob
+      labels:
+        app: testjob
+        job_id: ${JOB_SHA}
+    spec:
+      containers:
+      - name: testjob
+        image: 172.30.192.160:5000/demo/docker-images
+        env:
+        - name: GIT_URL
+          value: "https://github.com/propyless/ansible-canary.git"
+        - name: PLAYBOOK
+          value: "init.yml"
+        command: ["/opt/app-root/runme.sh"]
+      restartPolicy: Never
+EOF
+
+oc create -f testjob.yaml
+
+while true; do
+	sleep 1
+	if oc get pods --show-labels | grep ${JOB_SHA} | grep -i completed >/dev/null; then
+    	echo "OK: Job pod completed. This means the ansible playbook worked as it should"
+        FAIL=0
+        break
+    elif oc get pods --show-labels | grep ${JOB_SHA} | grep -i Error >/dev/null; then
+    	echo "FAIL: Job pod failed. This means the ansible playbook did not work as it should"
+        FAIL=1
+        break
+    fi
+done
+    
+JOBPOD=$(oc get pods --show-labels | grep ${JOB_SHA} | awk \'{ print $1 }\'|tail -1)
+
+oc logs $JOBPOD || true
+
+if [ "$FAIL" -eq 0 ]; then
+    oc delete jobs -l job_id=${JOB_SHA}
+	exit 0
+else
+	exit 1
+fi
+'''
+
+stage 'Deploy to production branch'
+    sh 'echo git push origin/master origin/production'
+
+}
+
